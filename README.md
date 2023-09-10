@@ -1,4 +1,4 @@
-﻿#Preparation
+﻿# Preparation
 Disclaimer: Very much a work in progress.
 
 Build a computer in Satisfactory and add a Floppy Disk and EEPRROM to it.
