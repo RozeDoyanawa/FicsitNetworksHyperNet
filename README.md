@@ -40,7 +40,7 @@
 ## Example node:
 An example for a node called Node1.
 
-![Example Node](Documentation/Image-003)
+![Example Node](Documentation/Image-003.png)
 # Light Tower:
 Simply a modular indicator tower with one or two indicators. 
 
