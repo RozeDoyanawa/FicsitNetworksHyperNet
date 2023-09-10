@@ -1,4 +1,13 @@
-﻿![Network Descriptor Top Down](Documentation/Image-001.png)
+﻿#Preparation
+Disclaimer: Very much a work in progress.
+
+Build a computer in Satisfactory and add a Floppy Disk and EEPRROM to it.
+Find the filesystem path to the floppy drive.
+On Windows, usually under %localappdata%\FactoryGame\Saved\SaveGames\Computers\
+You can see the ID of the floppy drive in game in its tool tip text. Remember you have to insert it into a computer first, then remove it, to get an ID. Un-used drives is not mapped.
+Copy Common.lua, json.lua and HyperNet/HyperNet.lua into the root of the drive. And copy the contents of init-hypernet.lua into the eeprom code window in game. Before you run the computer, also create two folders panels and tubedata into the floppy, or you will get errors running the machine.
+
+![Network Descriptor Top Down](Documentation/Image-001.png)
 
 ![Network Descriptor](Documentation/Image-002.png)
 # Network setup:
