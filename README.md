@@ -41,6 +41,9 @@
 An example for a node called Node1.
 
 ![Example Node](Documentation/Image-003.png)
+
+[3-way Node with Exit. Named, but all names need parameters to be replaced](https://satisfactory-calculator.com/en/blueprints/index/details/id/3861/name/HyperNet+Entrance+Node)
+
 # Light Tower:
 Simply a modular indicator tower with one or two indicators. 
 
@@ -59,3 +62,4 @@ Simply a modular indicator tower with one or two indicators.
 - 1x Push Button or Mushroom Pushbutton
 
 ![Large Panel Example](Documentation/Image-005.png)
+
