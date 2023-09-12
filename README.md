@@ -7,6 +7,8 @@ On Windows, usually under %localappdata%\FactoryGame\Saved\SaveGames\Computers\
 You can see the ID of the floppy drive in game in its tool tip text. Remember you have to insert it into a computer first, then remove it, to get an ID. Un-used drives is not mapped.
 Copy Common.lua, json.lua and HyperNet/HyperNet.lua into the root of the drive. And copy the contents of init-hypernet.lua into the eeprom code window in game. Before you run the computer, also create two folders panels and tubedata into the floppy, or you will get errors running the machine.
 
+![image](https://github.com/RozeDoyanawa/FicsitNetworksHyperNet/assets/1959837/8ef075e8-65da-482d-89cf-72c0747d47a1)
+
 ![Network Descriptor Top Down](Documentation/Image-001.png)
 
 ![Network Descriptor](Documentation/Image-002.png)
