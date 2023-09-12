@@ -1484,13 +1484,17 @@ function main()
 
 
     ---@type SizeableModulePanel
-    local testPanel = component.proxy(component.findComponent("HyperNetDebugPanel")[1] );
-    local btn = testPanel:getModule(1,9);
-    initModularButton(btn, function(self)
-        --print(computer.millis());
-        error()
-    end);
-    btn.enabled = true
+    local comp = component.findComponent("HyperNetDebugPanel")[1];
+    if comp ~= nil then
+        ---@type SizeableModulePanel
+        local testPanel = component.proxy( comp );
+        local btn = testPanel:getModule(1,9);
+        initModularButton(btn, function(self)
+            --print(computer.millis());
+            error()
+        end);
+        btn.enabled = true
+    end
     --test:getPrefabSignData()
 
     --local v = getNode("1")
