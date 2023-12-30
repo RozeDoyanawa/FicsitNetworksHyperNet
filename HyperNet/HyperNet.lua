@@ -16,7 +16,6 @@ local componentNickData = {}
 ---@type table<string,TransportNode>
 local transportNodes = {}
 
-local error = false
 
 --##########################################################################################
 --##############################                             ###############################
@@ -25,11 +24,12 @@ local error = false
 --##########################################################################################
 
 ---@class PassthroughGate
+---@field name string
 ---@field parent TransportNode
 ---@field next PassthroughGate
 ---@field metric number
 ---@field index number
----@field gateComp ComponentReference<Build_PowerSwitch_C>
+---@field gateComp ComponentReference<CircuitSwitch>
 ---@field gate table<string,string>
 local PassthroughGate = {
     parent = nil,
@@ -47,7 +47,7 @@ function PassthroughGate.new(name, index)
     }
     obj.gate = getHyperNetObject(name, "gate", index)
     obj.index = tonumber(index)
-    obj.gateComp = createReference(obj.gate.id, Build_PowerSwitch_C)
+    obj.gateComp = createReference(obj.gate.id, CircuitSwitch)
     obj.parent = getNode(name)
     obj.next = nil
 
@@ -58,8 +58,17 @@ function PassthroughGate.new(name, index)
         end
         ---@type Build_PipeHyperStart_C
         local sourcePipe = component.proxy(sourcePipeData.id)
+        --print(sourcePipe)
         local connectors = sourcePipe:getPipeConnectors()
+        if connectors ~= nil then
+            for __index, value in pairs(connectors) do
+                --print(__index, value)
+            end
+        else
+            print("Connector nil");
+        end
         local result = enumeratePipe(connectors[1], 60, 0)
+        obj.pipeRoute = result
         --print("Result: " , result)
         local remoteFound = false
         if result ~= nil and #result > 0 then
@@ -127,7 +136,7 @@ function traversePipe(connector, maxDepth, level)
         computer.stop()
         return nil
     end
-    print(connector, connector.hash, connector.owner, connector.owner.hash)
+    --print(connector, connector.hash, connector.owner, connector.owner.hash)
     local target = connector:getConnection()
     if target == nil then
         return connector.owner
@@ -167,7 +176,8 @@ function calculatePipeLengthFromActorList(actors)
     local L = lastObject.location
     for _, v in pairs(actors) do
         local N = v.location
-        length = length + ((L.x - N.x) ^ 2 + (L.y - N.y) ^ 2 + (L.z - N.z) ^ 2)^(1/2)
+        length = length + math.sqrt((L.x - N.x) ^ 2 + (L.y - N.y) ^ 2 + (L.z - N.z) ^ 2)
+        L = N
     end
     return length
 end
@@ -189,7 +199,7 @@ function enumeratePipe(connector, maxDepth, level)
         computer.stop()
         return nil
     end
-    print(connector, connector.hash, connector.owner, connector.owner.hash)
+    --print(connector, connector.hash, connector.owner, connector.owner.hash)
     local target = connector:getConnection()
     if target == nil then
         local list = {}
@@ -233,11 +243,11 @@ function PassthroughGate:updateDestination()
         --    error()
         --end
         if self.metric == 0 then
-            ---@type Build_PowerSwitch_C
+            ---@type CircuitSwitch
             local remComp = remNode.exitComp:get()
             local remLoc = remComp.location
 
-            ---@type Build_PowerSwitch_C
+            ---@type CircuitSwitch
             local locComp = self.parent.exitComp:get()
             local locLoc = locComp.location
 
@@ -256,8 +266,10 @@ end
 
 ---@param state boolean
 function PassthroughGate:setEnabled(state)
-    print("Setting state of gate " ,self.gate.index, "of node" , self.parent.name, "to", state)
-    self.gateComp:get().isSwitchOn = state
+    --print("Setting state of gate " ,self.gate.index, "of node" , self.parent.name, "to", state)
+    ---@type CircuitSwitch
+    local v = self.gateComp:get()
+    v:setIsSwitchOn(state)
 end
 
 ---@class TransportState : number
@@ -274,16 +286,18 @@ local TransportState = {
 --##############################                             ###############################
 --##########################################################################################
 
+
 ---@class TransportNode
 ---@field passthrough table<number,PassthroughGate>
 ---@field name string
----@field entranceComp ComponentReference<Build_PowerSwitch_C>
----@field exitComp ComponentReference<Build_PowerSwitch_C>
+---@field entranceComp ComponentReference
+---@field exitComp ComponentReference
 ---@field panel SmallTransportPanel
 ---@field ui LargeTransportUI
 ---@field tower HyperNetSignalTower
 ---@field sign SignFormat
 ---@field junction boolean
+---@field location Point3D
 ---@field activePath TravelNode[]
 local TransportNode = {
 }
@@ -353,7 +367,7 @@ end
 ---@param connector PipeConnectionBase
 ---@param pipe Build_PipeHyper_C
 function TransportNode:transferFunction(event, success)
-    print("transferFunction(" , success, ")")
+    print("transferFunction(" , event , success, ")")
     if event == "PlayerEntered" then
         self:setEntryEnabled(false)
         if self.activePath ~= nil then
@@ -377,27 +391,35 @@ function TransportNode:transferFunction(event, success)
             print("Invalid path for exit @ node " .. self.name)
         end
     else
-        print("Invalid state @ node " .. self.name.. ", state is " .. tostring(self.state))
+        print("Invalid event @ node " .. self.name.. ", event is " .. event)
     end
 end
 
 ---@param state boolean
 function TransportNode:setEntryEnabled(state)
-    print("Setting state of entry of node " , self.name, "to" ,state)
-    self.entranceComp:get().isSwitchOn = state
+    --print("Setting state of entry of node " , self.name, "to" ,state)
+    ---@type CircuitSwitch
+    local v = self.entranceComp:get()
+    v:setIsSwitchOn(state):await()
 end
 
 ---@param state boolean
 function TransportNode:setExitEnabled(state)
-    print("Setting state of exit of node " , self.name, "to" ,state)
-    self.exitComp:get().isSwitchOn = state
+    --print("Setting state of exit of node " , self.name, "to" ,state)
+    ---@type CircuitSwitch
+    local v = self.exitComp:get()
+    v:setIsSwitchOn(state):await()
 end
 
 ---@param state boolean
 function TransportNode:closeAll()
     if not self.junction then
-        self.exitComp:get().isSwitchOn = false
-        self.entranceComp:get().isSwitchOn = false
+        if self.entranceComp ~= nil then
+            self:setEntryEnabled(false)
+        end
+        if self.exitComp ~= nil then
+            self:setExitEnabled(false)
+        end
     end
     if self.panel ~= nil then
         self.panel:setSelectedDestinationIndex(self.panel.destinationIndex)
@@ -447,7 +469,9 @@ function TransportNode:openTravel(destination)
                     v.node:setState(TransportState.Occupied)
                 end
             else
-                v.node:setExitEnabled(false)
+                if v.node.exitComp ~= nil then
+                    v.node:setExitEnabled(false)
+                end
                 for _,v2 in pairs(v.node.passthrough) do
                     v2:setEnabled(v.gate == v2)
                 end
@@ -715,6 +739,17 @@ local SmallTransportPanel = {
 }
 
 
+function getClassName(obj)
+    local v = tostring(obj)
+    local _start = "Object<"
+    local _end = ">"
+    if string.len(v) > string.len(_start) + string.len(_end) then
+        if string.sub(v, 0, string.len(_start)) == _start  then
+
+        end
+    end
+end
+
 ---@return SmallTransportPanel
 ---@param name string
 function SmallTransportPanel.new(name)
@@ -751,8 +786,9 @@ function SmallTransportPanel.new(name)
         local debugTypes = ""
         local width = math.abs(panelComp.width);
         local height = math.abs(panelComp.height);
+
         if panel.variant ~= nil then
-            debugTypes = debugTypes .. "Variant: "  .. panel.variant .. "\n"
+            debugTypes = debugTypes .. "Variant: "  .. panel.variant .. "\r\n"
         end
         if width == 1 then
             typeInfo = "Y:"
@@ -761,7 +797,7 @@ function SmallTransportPanel.new(name)
         end
 
         --print(tostring(height) .. "x" .. tostring(width))
-        debugMatrix = debugMatrix .. "┌" .. rpad("", width * 6 - 1, "─").."┐\n"
+        debugMatrix = debugMatrix .. "┌" .. rpad("", width * 6 - 1, "─").."┐\r\n"
         local lastClass = nil
         local reverse = false
         for y=0,height - 1,1 do
@@ -770,8 +806,8 @@ function SmallTransportPanel.new(name)
                 local t = panelComp:getModule(x,y);
                 if t ~= nil then
                     debugMatrix = debugMatrix .. lpad(tostring(x), 2, " ") .. "x" .. rpad(tostring(y), 2, " ")
-                    debugTypes = debugTypes .. tostring(x) .. "x" .. tostring(y).. ": " .. tostring(t) .. "\n"
-                    local class = tostring(t)
+                    debugTypes = debugTypes .. tostring(x) .. "x" .. tostring(y).. ": " .. tostring(t) .. "\r\n"
+                    local class = t:getType().name
                     if class == "MushroomPushbuttonModule" or class == "PushbuttonModule" then
                         btn = t
                         if enc == nil then
@@ -799,20 +835,21 @@ function SmallTransportPanel.new(name)
                 end
                 debugMatrix = debugMatrix .. "│"
             end
-            debugMatrix = debugMatrix .. "\n"
+            debugMatrix = debugMatrix .. "\r\n"
         end
-        debugTypes = debugTypes .. "enc=" .. tostring(enc) .. "\n"
-        debugTypes = debugTypes .. "txt1=" .. tostring(txt1) .. "\n"
-        debugTypes = debugTypes .. "txt2=" .. tostring(txt2) .. "\n"
-        debugTypes = debugTypes .. "btn=" .. tostring(btn) .. "\n"
+        debugTypes = debugTypes .. "enc=" .. tostring(enc) .. "\r\n"
+        debugTypes = debugTypes .. "txt1=" .. tostring(txt1) .. "\r\n"
+        debugTypes = debugTypes .. "txt2=" .. tostring(txt2) .. "\r\n"
+        debugTypes = debugTypes .. "btn=" .. tostring(btn) .. "\r\n"
         if reverse then
             local t = txt1
             txt1 = txt2
             txt2 = t
         end
-        debugMatrix = debugMatrix .. "└" .. rpad("", width * 6 - 1, "─").."┘\n"
-        debugTypes = debugTypes .. "reversed=" .. tostring(reverse) .. "\n"
-        printArrayToFile("panels/panel-" .. obj.parent.name .. ".txt", debugMatrix .. "\n\n" .. debugTypes .. "\n\nTypeinfo: " .. typeInfo)
+        debugMatrix = debugMatrix .. "└" .. rpad("", width * 6 - 1, "─").."┘\r\n"
+        debugTypes = debugTypes .. "reversed=" .. tostring(reverse) .. "\r\n"
+        --print(debugMatrix .. "\r\n" .. debugTypes )
+        printArrayToFile("panels/panel-" .. obj.parent.name .. ".txt", debugMatrix .. "\r\n\r\n" .. debugTypes .. "\r\n\r\nTypeinfo: " .. typeInfo)
     end
 
     obj.txtDistance = txt2
@@ -919,16 +956,30 @@ end
 
 function SmallTransportPanel:refreshDestinations()
     --print("Updating destinations for node ", self.parent.name)
+    local selfLocation = self.parent.location
     local accessibleNodes = getAccessibleNodes(self.parent.name, 20)
     self.destinations = {}
     for _,v in pairs(accessibleNodes) do
         if v.accessible and v.nodeName ~= self.parent.name then
+            local nodeL = getNode(v.nodeName).location
+            v.distance = math.sqrt((nodeL.x - selfLocation.x) ^ 2 + (nodeL.y - selfLocation.y) ^ 2 + (nodeL.z - selfLocation.z) ^ 2)
             ---@type DestinationItem
             table.insert(self.destinations, v)
         end
     end
+    ---@param a DestinationItem
+    ---@param b DestinationItem
+    usort(self.destinations, function(a,b)
+        if a.distance > b.distance then
+            return -1
+        elseif a.distance < b.distance then
+            return 1
+        end
+        return 0
+    end)
+
     if self.parent.name == "4" and #self.destinations <= 4 then
-        printArray(self.destinations, 2)
+        --printArray(self.destinations, 2)
         --error()
         --computer.stop()
     end
@@ -990,7 +1041,7 @@ function LargeTransportUI.new(node)
     obj.encNavigate = panelComp:getModule(4, 0)
     obj.btnReset = panelComp:getModule(5, 0)
 
-    print(obj.encNavigate)
+    --print(obj.encNavigate)
 
     initModularEncoder(obj.encNavigate, function(self, change)
         obj:setSelectedDestinationIndex(obj.destinationIndex + change)
@@ -1080,7 +1131,425 @@ function LargeTransportUI:refreshDestinations()
 end
 
 
+--##########################################################################################
+--################################                         #################################
+--################################    Screen Driver  v2    #################################
+--################################                         #################################
+--##########################################################################################
 
+
+---@class BigScreenV2
+---@field screenRef ComponentReference<Screen>
+---@field gpuRef FINComputerGPUT2
+---@field screenSize Vector2D
+---@field mapBounds table
+---@field mapRange table
+---@field mapScale table
+local BigScreenV2 = {}
+
+
+---@param componentID string
+---@return BigScreenV2
+function BigScreenV2.new(componentID, gpuIndex)
+    ---@type BigScreenV2
+    local obj = {
+        screenRef = ComponentReference.new(componentID),
+        gpuRef =  computer.getPCIDevices(classes.GPU_T2_C)[gpuIndex + 1],
+        mapBounds = 0,
+        mapRange = 0,
+        mapScale = 0,
+    }
+
+    ---@type Screen
+    local ref = obj.screenRef:get()
+
+    print("GPU Ref: ", obj.gpuRef);
+    obj.gpuRef:bindScreen(ref):await()
+
+    print(obj.gpuRef);
+    obj.gpuRef:drawLines({{0,0}, {100,100}}, 2, {1,1,1,1})
+    obj.gpuRef:drawText({50,0}, "2D Drawing!", 10, {1,1,1,1}, false)
+    obj.gpuRef:drawText({25,150}, "NIIICE!!!", 25, {1,0,0,1}, false)
+    local screenSize = obj.gpuRef:getScreenSize()
+    obj.screenSize = screenSize
+    if obj.screenSize.x <= 0 then
+        obj.screenSize.x = 1000
+    end
+    if obj.screenSize.y <= 0 then
+        obj.screenSize.y = 1000
+    end
+    print("ScreenSize", obj.screenSize.x, obj.screenSize.y)
+
+
+    obj.mapBounds = {left = -323929, top = -334717, right = 424166, bottom = 361634}
+    obj.mapRange = {width = math.abs(obj.mapBounds.left) + math.abs(obj.mapBounds.right), height = math.abs(obj.mapBounds.top) + math.abs(obj.mapBounds.bottom)}
+    obj.mapScale = {x = screenSize.x / obj.mapRange.width, y = obj.screenSize.y / obj.mapRange.height}
+    --obj.gpuRef:drawBox({
+    --    position = {0,0},
+    --    size = {100, 100},
+    --    rotation = 0,
+    --    color = {1,1,1,1},
+    --    image = "https://cdn.discordapp.com/attachments/378521107256573963/1185754812508282910/image.png?ex=6590c339&is=657e4e39&hm=576b9dad3b8878ab880e159575ec7f27f64939e5c763e3f85518613e7ab1577e&",
+    --    imageSize = {100, 100},
+    --    hasCenteredOrigin = true,
+    --    horizontalTiling = false,
+    --    verticalTiling = false,
+    --    isBorder = false,
+    --    margin = {0,0,0,0},
+    --    isRounded = false,
+    --    radii = 0,
+    --    hasOutline = false,
+    --    outlineColor = {0,0,0,0},
+    --    outlineThickness = 0
+    --})
+    --obj.gpuRef:drawRect(
+    --        {0,0},
+    --        {screenSize.x, screenSize.y},
+    --        {1,1,1,1},
+    --        "https://cdn.discordapp.com/attachments/378521107256573963/1185754812508282910/image.png?ex=6590c339&is=657e4e39&hm=576b9dad3b8878ab880e159575ec7f27f64939e5c763e3f85518613e7ab1577e&",
+    --        0
+    --)
+
+    --obj.gpuRef:drawLines({{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}}, 5, {1,1,0,1})
+
+
+    --registerEvent(obj.gpuRef, obj, nil, {
+    --    ---@param self BigScreenV2
+    --    ---@param position Vector2D
+    --    ---@param wheelDelta number
+    --    ---@param modifiers number
+    --    OnMouseWheel = function(self, position, wheelDelta, modifiers)  end,
+    --    ---@param self BigScreenV2
+    --    ---@param position Vector2D
+    --    ---@param modifiers number
+    --    OnMouseUp = function(self, position, modifiers)  end,
+    --    ---@param self BigScreenV2
+    --    ---@param position Vector2D
+    --    ---@param modifiers number
+    --    OnMouseDown = function(self, position, modifiers)  end,
+    --    ---@param self BigScreenV2
+    --    ---@param position Vector2D
+    --    ---@param modifiers number
+    --    OnMouseMove = function(self, position, modifiers)
+    --        print(position.x, position.y)
+    --    end,
+    --    ---@param self BigScreenV2
+    --    ---@param position Vector2D
+    --    ---@param modifiers number
+    --    OnMouseLeage = function(self, position, modifiers)  end,
+    --    ---@param self BigScreenV2
+    --    ---@param position Vector2D
+    --    ---@param modifiers number
+    --    OnMouseEnter = function(self, position, modifiers)  end,
+--
+    --    ---@param self BigScreenV2
+    --    ---@param c number
+    --    ---@param code number
+    --    ---@param modifiers number
+    --    OnKeyUp = function(self, c, code, modifiers)  end,
+    --    ---@param self BigScreenV2
+    --    ---@param c number
+    --    ---@param code number
+    --    ---@param modifiers number
+    --    OnKeyDown = function(self, c, code, modifiers)  end,
+    --    ---@param self BigScreenV2
+    --    ---@param character number
+    --    ---@param modifiers number
+    --    OnKeyCharacter = function(self, character, modifiers)  end,
+--
+    --    ScreenBound = function(self, oldScreen)  end,
+    --    ProductionChanged = function(self, state)  end,
+    --})
+
+    setmetatable(obj, BigScreenV2)
+    BigScreenV2.__index = BigScreenV2
+
+    obj:paintMap()
+
+    obj.gpuRef:flush()
+
+    return obj
+end
+
+---@param x number
+---@param y number
+---@return Point|table
+function BigScreenV2:GameCoordToScreenCoord(x, y)
+    return {x = (x + math.abs(self.mapBounds.left)) * self.mapScale.x, y = (y + math.abs(self.mapBounds.top)) * self.mapScale.y}
+end
+
+function BigScreenV2:paintMap()
+    self.gpuRef:drawBox({
+        position = {0,0},
+        size = {self.screenSize.x, self.screenSize.y},
+        rotation = 0,
+        color = {1,1,1,1},
+        image = "https://cdn.discordapp.com/attachments/378521107256573963/1185754812508282910/image.png?ex=6590c339&is=657e4e39&hm=576b9dad3b8878ab880e159575ec7f27f64939e5c763e3f85518613e7ab1577e&",
+        imageSize = {100, 100},
+        hasCenteredOrigin = false,
+        verticalTiling = false,
+        horizontalTiling = false,
+        isBorder = false,
+        margin = {0,0,0,0},
+        isRounded = false,
+        radii = {0,0,0,0},
+        hasOutline = false,
+        outlineThickness = false,
+        outlineColor = {1,1,1,1}
+    })
+end
+
+
+---@class DrawContext
+---@field stationListLocation Point
+---@field stationListSize number
+---@field selectedNode string
+---@field hoveredNode string
+---@field stationListIncludeJunction boolean
+
+function BigScreenV2:repaint()
+    --self.gpuRef:drawRect({0,0}, {self.screenSize.x, self.screenSize.y}, {1,1,1,1}, "https://cdn.discordapp.com/attachments/378521107256573963/1185754812508282910/image.png?ex=6590c339&is=657e4e39&hm=576b9dad3b8878ab880e159575ec7f27f64939e5c763e3f85518613e7ab1577e&", 0)
+    self:paintMap()
+    local drawnNodes = {}
+    ---@type TransportNode[]
+    local nodeList = {}
+
+    for _, node in pairs(transportNodes) do
+        self:drawNodeConnections(node, drawnNodes)
+        nodeList[#nodeList + 1] = node
+    end
+
+    ---@type DrawContext
+    local drawContext = {
+        stationListLocation = {x = 0, y = 0},
+        stationListSize = 0,
+        hoveredNode = nil,
+        selectedNode = nil,
+        stationListIncludeJunction = true,
+    }
+
+
+    ---@param a TransportNode
+    ---@param b TransportNode
+    --usort(nodeList, function(a,b)
+    --    if a == nil and b == nil then
+    --        return 0
+    --    elseif a == nil then
+    --        return -1
+    --    elseif b == nil then
+    --        return 1
+    --    end
+    --    if a.location.x < b.location.x then
+    --        return 1
+    --    elseif a.location.x > b.location.x then
+    --        return -1
+    --    else
+    --        if a.location.y < b.location.y then
+    --            return 1
+    --        elseif a.location.y > b.location.y then
+    --            return -1
+    --        else
+    --            return 0
+    --        end
+    --    end
+    --end)
+    ---@param a TransportNode
+    ---@param b TransportNode
+    usort(nodeList, function(a, b)
+        local aText = ""
+        local bText = ""
+        if a ~= nil then
+            if a.caption ~= nil and string.len(a.caption) > 0 then
+                aText = a.caption
+            else
+                aText = a.name
+            end
+        end
+        if b ~= nil then
+            if b.caption ~= nil and string.len(b.caption) > 0 then
+                bText = b.caption
+            else
+                bText = b.name
+            end
+        end
+        return CASE_INSENSITIVE_COMPARATOR(aText, bText)
+    end)
+
+
+    local t = ""
+    for i, node in pairs(nodeList) do
+        t = t .. tostring(i) .. " = " .. node.name .. "\n"
+    end
+    print(t)
+
+    for _, node in pairs(nodeList) do
+        self:drawNode(node, drawContext)
+    end
+
+    print("Drawing Finished")
+    self.gpuRef:flush()
+end
+
+
+---@param node TransportNode
+---@param drawnList table<string, any>
+function BigScreenV2:drawNodeConnections(node, drawnNodes)
+    if drawnNodes[node.name] ~= nil then
+        return
+    end
+    drawnNodes[node.name] = true
+
+    --error("Draw rect at " .. coords.x .. "x" .. coords.y)
+
+
+    for _, gate in pairs(node.passthrough) do
+        local e = self:drawTube(gate)
+        if e ~= nil then
+            self:drawNodeConnections(getNode(e), drawnNodes)
+        end
+    end
+
+end
+
+---@param node TransportNode
+---@param drawContext DrawContext
+function BigScreenV2:drawNode(node, drawContext)
+    ---@type Point
+    local coords -- = {x = 0, y = 0};
+
+    coords = self:GameCoordToScreenCoord(node.location.x, node.location.y)
+
+    local nodeText = node.name
+    if node.caption ~= nil then
+        nodeText = node.caption
+    end
+    local textSize = self.gpuRef:measureText(nodeText, 15, false):await()
+
+    ---@type Color|table
+    local nodeColor
+    if node.junction then
+        --nodeColor = structs.Color({0, 0.5, 0.5, 1})
+        nodeColor = {0, 0.5, 0.5, 1}
+    else
+        --nodeColor = structs.Color({1, 0, 0, 1})
+        nodeColor = {1, 0, 0, 1}
+    end
+
+    --self.gpuRef:drawRect({x = coords.x - 5, y = coords.y - 5}, {10, 10}, {1, 0, 0, 1}, nil, 0)
+    self.gpuRef:drawBox({
+        position = {x = coords.x - 8, y = coords.y - 8},
+        size = {x = 16, y = 16},
+        isRounded = true,
+        radii = {8, 8, 8, 8},
+        color = nodeColor,
+    })
+    if not node.junction then
+        self.gpuRef:drawBox({
+            position = {x = coords.x + 10, y = coords.y - 12},
+            size = {x = textSize.x + 4, y = 24},
+            isRounded = true,
+            radii = {2,2,2,2},
+            color = {0.7, 0.7, 0.7, 0.35}
+        })
+        self.gpuRef:drawText({x = coords.x + 12, y = coords.y - 15} , nodeText, 15, {0.4,0,0.4,1}, false)
+    end
+
+
+    if not node.junction or drawContext.stationListIncludeJunction then
+        ---@type string
+        local listText
+        ---@type Color|table
+        local listTextColor
+        if node.junction then
+            listText = "(" .. node.name .. ")"
+            listTextColor = {0,0.3,0.3,1}
+        else
+            if node.caption ~= nil then
+                listText = node.caption .. " (" .. node.name .. ")"
+            else
+                listText = node.name
+            end
+            listTextColor = {0.3,0,0.3,1}
+        end
+        textSize = self.gpuRef:measureText(listText, 15, false):await()
+        local listCoords = drawContext.stationListLocation
+        local y = listCoords.y + drawContext.stationListSize * 35
+        local x = listCoords.x
+
+        local boxWidth = math.max(200, 10 + textSize.x);
+
+        self.gpuRef:pushClipRect({x, y}, {boxWidth, textSize.y + 6})
+        self.gpuRef:drawBox({
+            position = {x = x, y = y},
+            outlineThickness = 3,
+            outlineColor = {0.7,0.7,0.7,1},
+            color = {0.7, 0.7, 0.7, 0.5},
+            size = {x = boxWidth, y = textSize.y + 6}
+        })
+
+        --self.gpuRef:drawRect({x = x, y = y}, {x = 100, y = 18}, {1,0,0,1}, nil, 0)
+        self.gpuRef:drawText({x + 5, y + 3} , listText, 15, listTextColor, false)
+
+        self.gpuRef:popClip()
+
+        if drawContext.hoveredNode == node.name or drawContext.selectedNode == node.name then
+            self.gpuRef:drawLines({{x =  x + 100, y = y + 10}, {x = coords.x, y = coords.y}}, 2, {0,1,0,1})
+        end
+
+        drawContext.stationListSize = drawContext.stationListSize + 1
+    end
+end
+
+---@param passthrough PassthroughGate
+function BigScreenV2:drawTube(passthrough)
+    local sourcePipeData = getHyperNetObject(passthrough.name, "pipe", tostring(passthrough.index))
+    if sourcePipeData == nil then
+        return
+    end
+    ---@type Build_PipeHyperStart_C
+    local sourcePipe = component.proxy(sourcePipeData.id)
+    --print(sourcePipe)
+    local connectors = sourcePipe:getPipeConnectors()
+    if connectors ~= nil then
+        for __index, value in pairs(connectors) do
+            --print(__index, value)
+        end
+    else
+        print("Connector nil");
+    end
+    local result = enumeratePipe(connectors[1], 60, 0)
+    --print("Result: " , result)
+    local debugList = {}
+    local coordList = {}
+    if result ~= nil and #result > 0 then
+        --printArrayToFile("result" .. name .. "x" .. index ..".txt", result, 5)
+        --print(tostring(result:getType().name))
+        for _, actor in pairs(result) do
+            local q = self:GameCoordToScreenCoord(actor.location.x, actor.location.y)
+            --print("Coord: " , q.x, q.y)
+            debugList[#debugList + 1] = q
+            coordList[#coordList + 1] = structs.Vector2D({q.x, q.y})
+        end
+
+        local comp = result[#result]
+        if comp:getType().name == "Build_PipeHyperStart_C" then
+
+            if comp.nick ~= nil then
+                local nick = comp.nick
+                if string.sub( nick,0, 9) == "HyperNet " then
+                    nick = string.sub(nick, 10)
+                    local params = parseParams(nick)
+                    self.gpuRef:drawLines(coordList, 5, {0, 1, 1, 1})
+                    printArrayToFile("temp/" .. passthrough.name .. "-" .. tostring(passthrough.index) .. ".txt" , debugList)
+                    --error("")
+                    return params.name
+                end
+
+            end
+        end
+    end
+    return nil
+end
 
 
 
@@ -1266,9 +1735,13 @@ function getNode(name, params)
             node.entranceComp = createReference(params.id)
             local exitParams = getHyperNetObject(name, "exit")
             node.exitComp = createReference(exitParams.id)
+            local locComp = node.entranceComp:get()
+            node.location = {x = locComp.location.x, y = locComp.location.y, z = locComp.location.z}
             node.junction = false
         else
             node.junction = true
+            local locComp = createReference(params.id):get()
+            node.location = {x = locComp.location.x, y = locComp.location.y, z = locComp.location.z}
         end
 
         if params.name ~= nil then
@@ -1340,12 +1813,28 @@ function getHyperNetObject(name, type, index)
     --print("getHyperNetObject" , name, type, index)
     for _,v in pairs(componentNickData) do
         --print("--> test" , v.node, v.type, v.index)
-        if v.node == name and v.type == type and (index == nil or index == v.index) then
+        if (name == nil or v.node == name) and v.type == type and (index == nil or index == v.index) then
             --print("OK")
             return v
         end
     end
     return nil;
+end
+
+---@param type string
+---@overload fun(name:string, type:string):table<string,string>
+---@return table<string,string>[]
+function getHyperNetObjectsOfType(type)
+    ---@type table<string, string>[]
+    local ret = {}
+    for _,v in pairs(componentNickData) do
+        --print("--> test" , v.node, v.type, v.index)
+        if v.type == type then
+            --print("OK")
+            ret[#ret] = v
+        end
+    end
+    return ret
 end
 
 function initTransportNetwork()
@@ -1372,13 +1861,60 @@ end
 
 --334 = arrow
 --341 = stop
+---@type BigScreenV2
+local bigScreen = nil
+
+function initScreen()
+    if scriptInfo.gpu ~= nil and scriptInfo.screen ~= nil then
+        local w = scriptInfo.screenWidth
+        local h = scriptInfo.screenHeight
+        --scriptInfo.gpu:bindScreen(scriptInfo.screen);
+        scriptInfo.gpu:setSize(w, h);
+        scriptInfo.gpu:fill(0,0,w,h, "O")
+
+        scriptInfo.gpu:setForeground(1,1,1,0.5);
+
+        scriptInfo.gpu:setText(0,0,"X")
+        scriptInfo.gpu:setText(w - 1,0,"X")
+        scriptInfo.gpu:setText(w - 1,h - 1,"X")
+        scriptInfo.gpu:setText(0,h - 1,"X")
+
+        scriptInfo.gpu:flush()
+    end
+
+    local t = getHyperNetObjectsOfType("HypertubeChart")
+    if t ~= nil then
+        for _, comp in pairs(t) do
+            bigScreen = BigScreenV2.new(comp.id, 0);
+            bigScreen:repaint()
+            break
+        end
+    end
+end
+
+
+function drawNetwork()
+
+end
+
 
 
 function main()
 
+    local t = {
+        14, 22, 20, 17, 60, 34, 68, 50, 62, 65, 6, 57, 79, 22, 93, 78, 75, 39, 60, 81, 5, 25, 84, 3, 60, 79, 16, 61, 92, 72, 5, 0, 66, 46, 83, 44, 37, 82, 11, 94
+    }
+
+
+    --usort(t, CASE_INSENSITIVE_COMPARATOR)
+    --printArray(t)
+
     initComponentCache()
 
     initTransportNetwork()
+
+    initScreen()
+
 
 
     ---@type Build_PipeHyperStart_C
@@ -1392,14 +1928,14 @@ function main()
 
     print( " -- - UPDATING NETWORK - - --  ")
 
-    printArrayToFile("transportNodes.txt", transportNodes, 2)
-    printArrayToFile("transportNodesRBEntJF.txt", transportNodes["RBEntJ"], 6)
+    --printArrayToFile("transportNodes.txt", transportNodes, 2)
+    --printArrayToFile("transportNodesRBEntJF.txt", transportNodes["RBEntJ"], 6)
     for k,v in pairs(transportNodes) do
         for k2,v2 in pairs(v.passthrough) do
             v2:updateDestination()
         end
     end
-    printArrayToFile("transportNodesD.txt", transportNodes, 2)
+    --printArrayToFile("transportNodesD.txt", transportNodes, 2)
     for k,v in pairs(transportNodes) do
         if v.panel ~= nil then
             v.panel:refreshDestinations()
@@ -1478,11 +2014,16 @@ function main()
     end, alive, 1000, "Alive Update"))
 
     --printArrayToFile("transportNodes.txt", transportNodes, 2)
-    printArrayToFile("transportNodesRBEntJ.txt", transportNodes["RBEntJ"], 6)
-    printArrayToFile("transportNodes2.txt", transportNodes["RozeBase"], 6)
-    printArrayToFile("transportNodes3.txt", transportNodes["5"], 6)
+    --printArrayToFile("transportNodesRBEntJ.txt", transportNodes["RBEntJ"], 6)
+    --printArrayToFile("transportNodes2.txt", transportNodes["RozeBase"], 6)
+    --printArrayToFile("transportNodes3.txt", transportNodes["5"], 6)
+
+    for __index, v in pairs(transportNodes) do
+        printArrayToFile("nodes/transport_".. v.name ..".txt", v, 6)
+    end
 
 
+            --print(computer.millis());
     ---@type SizeableModulePanel
     local comp = component.findComponent("HyperNetDebugPanel")[1];
     if comp ~= nil then

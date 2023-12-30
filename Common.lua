@@ -61,6 +61,33 @@ function millisToTimeString(timestamp, precision)
 end
 
 
+---@param s1 string
+---@param s2 string
+CASE_INSENSITIVE_COMPARATOR = function (s1, s2)
+    local n1 = string.len(s1);
+    local n2 = string.len(s2);
+    local min = math.min(n1, n2);
+    for i = 1,min do
+        local c1 = string.sub(s1, i,i);
+        local c2 = string.sub(s2, i,i);
+        if (c1 ~= c2) then
+            c1 = string.upper(c1);
+            c2 = string.upper(c2);
+            if (c1 ~= c2) then
+                c1 = string.lower(c1);
+                c2 = string.lower(c2);
+                if (c1 ~= c2) then
+                    -- No overflow because of numeric promotion
+                    local ret = string.byte(c1) - string.byte(c2)
+                    return ret;
+                end
+            end
+        end
+    end
+    return n1 - n2;
+end
+
+
 ---@class FluidType
 ---@field public name string @Fluid name
 ---@field public unpack string @Recipe name for unpacking
@@ -471,7 +498,7 @@ function computer.millis()
         b = oldmillis()
         c = math.abs( b - a )
     end
-    print("computer.millis(", a, c, ")")
+    --print("computer.millis(", a, c, ")")
     return a
 end
 
@@ -490,7 +517,7 @@ function resetComputer()
     rwarning("Computer reset issued!")
     local millis = computer.millis()
     event.clear()
-    while computer.millis() - millis < math.random(2000,50000) do --
+    while computer.millis() - millis < math.random(1000,30000) do --
         event.pull(1)
         print("Reset wait loop ", tostring(computer.millis()), tostring(millis))
     end
@@ -640,20 +667,26 @@ function processEvent(pullResult)
         return
     end
     if pullResult[2] then
+        print("E1")
         if pullResult[2].hash and eventHandlers[pullResult[2].hash] then
+            print("E2")
             local v = eventHandlers[pullResult[2].hash]
             if v.triggers and v.triggers[pullResult[1]] then
+                print("E3")
                 local trigger = pullResult[1]
                 table.remove(pullResult, 1)
                 table.remove(pullResult, 1)
                 v.triggers[trigger](v.instance, table.unpack(pullResult))
             elseif v.callback then
+                print("E4")
                 if v.doUnpack then
+                    print("E5")
                     local trigger = pullResult[1]
                     table.remove(pullResult, 1)
                     table.remove(pullResult, 1)
                     v.callback(v.instance, trigger, table.unpack(pullResult))
                 else
+                    print("E6")
                     v.callback(v.instance, pullResult[1], pullResult, 2)
                 end
             else
@@ -1085,7 +1118,6 @@ end
 ---@param c string @The character to pad with
 ---@return string, boolean @The new padded string and if the new string is equal to the old string
 function rpad(s, l, c)
-    print(l)
     local res = s .. string.rep(c or ' ', l - #s)
 
     return res, res ~= s
@@ -1258,7 +1290,7 @@ function printArrayToFile(fileName, arr, depth)
 end
 
 function initGPU()
-    local gpu = computer.getPCIDevices(findClass("GPU_T1_C"))[1]
+    local gpu = computer.getPCIDevices(classes.GPU_T1_C)[1]
     print("GPU", gpu)
     local screen = scriptInfo.screen
     print("Screen", screen)
@@ -1272,8 +1304,6 @@ function initGPU()
         gpu:setForeground(1,1,1,1)
         print("Screen init done")
         gpu:flush()
-    --else
-        --rerror("Screen: " .. tostring(screen) .. ", GPU: " .. tostring(gpu))
     end
 end
 
@@ -1435,9 +1465,9 @@ function commonMain(timeoutLong, timeoutShort, seldomCallback)
                 end
             end
             local next = periodicTask.next
-            print("Millis: " , m);
+            --print("Millis: " , m);
             if item.minimumInterval == 0 or m - item.lastExecution >= item.minimumInterval then
-                print("Task timeout: " , m, item.lastExecution, m-item.lastExecution, ">=", item.minimumInterval)
+                --print("Task timeout: " , m, item.lastExecution, m-item.lastExecution, ">=", item.minimumInterval)
                 item.lastExecution = computer.millis()
                 if item.func(item.ref) then
                     timeout = timeoutShort
@@ -1516,6 +1546,7 @@ function commonInit()
     else
         print ("No such adapter")
     end
+
     initGPU()
     if scriptInfo.fileSystemMonitor then
         print("Reboot on FileSystemUpdate is Enabled")
@@ -1525,7 +1556,9 @@ function commonInit()
                 resetComputer()
             end
         end)
-		event.listen(computer.getInstance())
+        registerEvent(computer.getInstance(), computer.getInstance(), function(instance, event)
+            print("ComputerInstanceEvent", instance, event)
+        end, nil, true, false)
     end
     local programFile = "Program.lua"
     if scriptInfo.mainProgram ~= nil then

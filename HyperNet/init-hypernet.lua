@@ -6,14 +6,13 @@ filesystem.initFileSystem("/dev")
 scriptInfo = {
     ---@type NetworkCard
     --network = component.proxy("0FB7C81A4D8ACBDB97B3D3BAE8F8A507"),
-    name = "HyperNetMgr",
+    name = "HyperNetManager",
     fileSystemMonitor = true,
     port = 100,
     preventResetAll = true,
     errorFlag = false,
     ---@type GPU_T1_C
     gpu = nil,
-    mainProgram = "HyperNet.lua",
 }
 
 drive = ""
@@ -29,6 +28,8 @@ filesystem.mount("/dev/" .. drive, "/")
 --main = function () end
 
 json = filesystem.doFile("/json.lua")
+---@type fun(arr:table,comp:fun(a,b))
+usort = filesystem.doFile("/sort.lua")
 filesystem.doFile("/Common.lua")
 
 commonInit()
