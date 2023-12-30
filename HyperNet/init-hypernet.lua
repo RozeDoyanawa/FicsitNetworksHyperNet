@@ -11,6 +11,7 @@ scriptInfo = {
     port = 100,
     preventResetAll = true,
     errorFlag = false,
+    mainProgram = "HyperNet.lua",
     ---@type GPU_T1_C
     gpu = nil,
 }
