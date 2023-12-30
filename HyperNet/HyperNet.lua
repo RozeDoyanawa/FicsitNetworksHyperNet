@@ -449,7 +449,7 @@ end
 ---@param destination string Node name of the destination node
 function TransportNode:openTravel(destination)
 
-    local path = findPath(self.name, destination, 10)
+    local path = findPath(self.name, destination, 20)
     --print("Path=",path)
     local pn = {}
     if path ~= nil and #path > 0 then
@@ -509,11 +509,11 @@ function TransportNode:openTravel(destination)
         end
     else
         if self.panel ~= nil then
-            self.button:setColor(1,0,0,1)
+            self.panel.btnTravel:setColor(1,0,0,1)
             ---@param self SmallTransportPanel
             schedulePeriodicTask(PeriodicTask.new(function(self)
                 self:setTravelEnabled(self.travelEnabled)
-            end, self, 2000, "Reset button color", true))
+            end, self.panel, 2000, "Reset button color", true))
         end
     end
 
@@ -1145,6 +1145,7 @@ end
 ---@field mapBounds table
 ---@field mapRange table
 ---@field mapScale table
+---@field coordOffset Point
 local BigScreenV2 = {}
 
 
@@ -1158,6 +1159,7 @@ function BigScreenV2.new(componentID, gpuIndex)
         mapBounds = 0,
         mapRange = 0,
         mapScale = 0,
+        coordOffset = {x = -10, y = 50},
     }
 
     ---@type Screen
@@ -1275,16 +1277,77 @@ end
 ---@param y number
 ---@return Point|table
 function BigScreenV2:GameCoordToScreenCoord(x, y)
-    return {x = (x + math.abs(self.mapBounds.left)) * self.mapScale.x, y = (y + math.abs(self.mapBounds.top)) * self.mapScale.y}
+    return {x = (x + math.abs(self.mapBounds.left)) * self.mapScale.x + self.coordOffset.x,
+            y = (y + math.abs(self.mapBounds.top)) * self.mapScale.y + self.coordOffset.y}
 end
 
 function BigScreenV2:paintMap()
+    local whalf = self.screenSize.x / 2;
+    local hhalf = self.screenSize.y / 2;
     self.gpuRef:drawBox({
         position = {0,0},
-        size = {self.screenSize.x, self.screenSize.y},
+        size = {whalf, hhalf},
         rotation = 0,
         color = {1,1,1,1},
-        image = "https://cdn.discordapp.com/attachments/378521107256573963/1185754812508282910/image.png?ex=6590c339&is=657e4e39&hm=576b9dad3b8878ab880e159575ec7f27f64939e5c763e3f85518613e7ab1577e&",
+        --image = "https://cdn.discordapp.com/attachments/378521107256573963/1185754812508282910/image.png?ex=6590c339&is=657e4e39&hm=576b9dad3b8878ab880e159575ec7f27f64939e5c763e3f85518613e7ab1577e&",
+        image = "engine:/Game/FactoryGame/Interface/UI/Assets/MapTest/SlicedMap/Map_0-0.Map_0-0",
+        imageSize = {100, 100},
+        hasCenteredOrigin = false,
+        verticalTiling = false,
+        horizontalTiling = false,
+        isBorder = false,
+        margin = {0,0,0,0},
+        isRounded = false,
+        radii = {0,0,0,0},
+        hasOutline = false,
+        outlineThickness = false,
+        outlineColor = {1,1,1,1}
+    })
+    self.gpuRef:drawBox({
+        position = {whalf,0},
+        size = {whalf, hhalf},
+        rotation = 0,
+        color = {1,1,1,1},
+        --image = "https://cdn.discordapp.com/attachments/378521107256573963/1185754812508282910/image.png?ex=6590c339&is=657e4e39&hm=576b9dad3b8878ab880e159575ec7f27f64939e5c763e3f85518613e7ab1577e&",
+        image = "engine:/Game/FactoryGame/Interface/UI/Assets/MapTest/SlicedMap/Map_1-0.Map_1-0",
+        imageSize = {100, 100},
+        hasCenteredOrigin = false,
+        verticalTiling = false,
+        horizontalTiling = false,
+        isBorder = false,
+        margin = {0,0,0,0},
+        isRounded = false,
+        radii = {0,0,0,0},
+        hasOutline = false,
+        outlineThickness = false,
+        outlineColor = {1,1,1,1}
+    })
+    self.gpuRef:drawBox({
+        position = {0,hhalf},
+        size = {whalf, hhalf},
+        rotation = 0,
+        color = {1,1,1,1},
+        --image = "https://cdn.discordapp.com/attachments/378521107256573963/1185754812508282910/image.png?ex=6590c339&is=657e4e39&hm=576b9dad3b8878ab880e159575ec7f27f64939e5c763e3f85518613e7ab1577e&",
+        image = "engine:/Game/FactoryGame/Interface/UI/Assets/MapTest/SlicedMap/Map_0-1.Map_0-1",
+        imageSize = {100, 100},
+        hasCenteredOrigin = false,
+        verticalTiling = false,
+        horizontalTiling = false,
+        isBorder = false,
+        margin = {0,0,0,0},
+        isRounded = false,
+        radii = {0,0,0,0},
+        hasOutline = false,
+        outlineThickness = false,
+        outlineColor = {1,1,1,1}
+    })
+    self.gpuRef:drawBox({
+        position = {whalf, hhalf},
+        size = {whalf, hhalf},
+        rotation = 0,
+        color = {1,1,1,1},
+        --image = "https://cdn.discordapp.com/attachments/378521107256573963/1185754812508282910/image.png?ex=6590c339&is=657e4e39&hm=576b9dad3b8878ab880e159575ec7f27f64939e5c763e3f85518613e7ab1577e&",
+        image = "engine:/Game/FactoryGame/Interface/UI/Assets/MapTest/SlicedMap/Map_1-1.Map_1-1",
         imageSize = {100, 100},
         hasCenteredOrigin = false,
         verticalTiling = false,
@@ -1521,25 +1584,38 @@ function BigScreenV2:drawTube(passthrough)
     --print("Result: " , result)
     local debugList = {}
     local coordList = {}
+    ---@type Point|table
+    local coords = nil
     if result ~= nil and #result > 0 then
         --printArrayToFile("result" .. name .. "x" .. index ..".txt", result, 5)
         --print(tostring(result:getType().name))
         for _, actor in pairs(result) do
             local q = self:GameCoordToScreenCoord(actor.location.x, actor.location.y)
             --print("Coord: " , q.x, q.y)
-            debugList[#debugList + 1] = q
-            coordList[#coordList + 1] = structs.Vector2D({q.x, q.y})
+            debugList[#debugList + 1] = {q, false}
+            if coords == nil then
+                coordList[#coordList + 1] = structs.Vector2D({q.x, q.y})
+                coords = {x = q.x, y = q.y}
+            else
+                local delta = {x = math.abs(q.x - coords.x), y = math.abs(q.y - coords.y)}
+                if delta.x > 1 or delta.y > 1 then
+                    coordList[#coordList + 1] = structs.Vector2D({q.x, q.y})
+                    coords.x = q.x
+                    coords.y = q.y
+                end
+            end
         end
 
         local comp = result[#result]
         if comp:getType().name == "Build_PipeHyperStart_C" then
 
             if comp.nick ~= nil then
+                ---@type string
                 local nick = comp.nick
                 if string.sub( nick,0, 9) == "HyperNet " then
                     nick = string.sub(nick, 10)
                     local params = parseParams(nick)
-                    self.gpuRef:drawLines(coordList, 5, {0, 1, 1, 1})
+                    self.gpuRef:drawLines(coordList, 5, {0,0.3,0.3,1})
                     printArrayToFile("temp/" .. passthrough.name .. "-" .. tostring(passthrough.index) .. ".txt" , debugList)
                     --error("")
                     return params.name
